@@ -2,6 +2,7 @@ import logging
 import os
 import sys
 import time
+from http import HTTPStatus
 
 import requests
 import telegram
@@ -30,7 +31,7 @@ ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
 
 
-HOMEWORK_STATUSES = {
+HOMEWORK_VERDICTS = {
     'approved': 'Работа проверена: ревьюеру всё понравилось. Ура!',
     'reviewing': 'Работа взята на проверку ревьюером.',
     'rejected': 'Работа проверена: у ревьюера есть замечания.'
@@ -42,11 +43,10 @@ def send_message(bot, message):
     try:
         bot.send_message(TELEGRAM_CHAT_ID, message)
     except Exception as error:
-        logger.error(
-            f'Ошибка при попытке отправить сообщение в телеграмм: {error}'
-        )
-    else:
-        logger.info(f'Бот отправил сообщение: {message}')
+        logger.error('Ошибка при попытке отправить сообщение в '
+                     f'телеграмм: {error}')
+        return error
+    logger.info(f'Бот отправил сообщение: {message}')
 
 
 def get_api_answer(current_timestamp):
@@ -56,7 +56,7 @@ def get_api_answer(current_timestamp):
     params = {'from_date': timestamp}
     try:
         response = requests.get(ENDPOINT, headers=HEADERS, params=params)
-        if response.status_code != 200:
+        if response.status_code != HTTPStatus.OK:
             raise exceptions.EndpointHomeworkError
     except exceptions.EndpointHomeworkError:
         message = f'Эндпоинт {ENDPOINT} недоступен. Статус кода не "ОК".'
@@ -66,8 +66,7 @@ def get_api_answer(current_timestamp):
         message = f'Ошибка при запросе к API Яндекс.Домашка: {error}'
         logger.error(message)
         raise exceptions.ApiHomeworkError(message)
-    else:
-        return(response.json())
+    return response.json()
 
 
 def check_response(response):
@@ -81,32 +80,34 @@ def check_response(response):
                        f': {error}')
             logger.error(message)
             raise KeyError(message)
-        else:
-            type_homeworks = type(response['homeworks'])
-            if type_homeworks == list:
-                return response['homeworks']
-            else:
-                message = ('Значение словаря API-ответа от Яндекс.Домашка под '
-                           'ключом "homeworks" не соответствует ожидаемому '
-                           f'типу данных: {type_homeworks}')
-                logger.error(message)
-                raise exceptions.TypeValueError(message)
+        if isinstance(response['homeworks'], list):
+            return response['homeworks']
+        message = ('Значение словаря API-ответа от Яндекс.Домашка под '
+                   'ключом "homeworks" не соответствует ожидаемому '
+                   'типу данных "list"')
+        logger.error(message)
+        raise exceptions.TypeValueError(message)
 
 
 def parse_status(homework):
     """Функция проверяет корректность полученных статусов от API."""
-    homework_name = homework['homework_name']
-    homework_status = homework['status']
     try:
-        HOMEWORK_STATUSES[homework_status]
+        homework_name = homework['homework_name']
+        homework_status = homework['status']
+    except KeyError as error:
+        message = ('В домашней работе API-ответа отсутствует необходимый ключ '
+                   f'словаря: {error}')
+        logger.error(message)
+        raise KeyError(message)
+    try:
+        HOMEWORK_VERDICTS[homework_status]
     except KeyError:
         message = (f'В ответе неопознанный статус домашней работы: '
                    f'{homework_status}')
         logger.error(message)
         raise KeyError(message)
-    else:
-        verdict = HOMEWORK_STATUSES[homework_status]
-        return f'Изменился статус проверки работы "{homework_name}". {verdict}'
+    verdict = HOMEWORK_VERDICTS[homework_status]
+    return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
 
 def check_tokens():
@@ -151,19 +152,22 @@ def main():
             new_message = f'Сбой в работе программы: {error}'
             logger.error(new_message)
             if message != new_message:
-                send_message(bot, new_message)
-                message = new_message
+                answer = send_message(bot, new_message)
+                if answer is None:
+                    message = new_message
         else:
             if (check_answer[0]['id'] == id_homework
                     and check_answer[0]['status'] == status_homework):
                 current_timestamp = response['current_date']
             else:
-                send_message(bot, status_message)
-                logger.info(f'Статус домашней работы {check_answer[0]["id"]} '
+                logger.info('Статус домашней работы '
+                            f'{check_answer[0]["id"]} '
                             f'изменился на {check_answer[0]["status"]}')
-                current_timestamp = response['current_date']
-                id_homework = check_answer[0]['id']
-                status_homework = check_answer[0]['status']
+                answer = send_message(bot, status_message)
+                if answer is None:
+                    current_timestamp = response['current_date']
+                    id_homework = check_answer[0]['id']
+                    status_homework = check_answer[0]['status']
         finally:
             time.sleep(RETRY_TIME)
 
