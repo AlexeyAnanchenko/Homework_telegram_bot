@@ -80,13 +80,13 @@ def check_response(response):
                        f': {error}')
             logger.error(message)
             raise KeyError(message)
-        if isinstance(response['homeworks'], list):
-            return response['homeworks']
-        message = ('Значение словаря API-ответа от Яндекс.Домашка под '
-                   'ключом "homeworks" не соответствует ожидаемому '
-                   'типу данных "list"')
-        logger.error(message)
-        raise exceptions.TypeValueError(message)
+    if isinstance(response['homeworks'], list):
+        return response['homeworks']
+    message = ('Значение словаря API-ответа от Яндекс.Домашка под '
+               'ключом "homeworks" не соответствует ожидаемому '
+               'типу данных "list"')
+    logger.error(message)
+    raise exceptions.TypeValueError(message)
 
 
 def parse_status(homework):
@@ -113,7 +113,6 @@ def parse_status(homework):
 def check_tokens():
     """Функция проверяет доступность всех необходимых переменных окружения."""
     variable_env = [PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID]
-    count = 0
     for i in variable_env:
         try:
             if i is None:
@@ -123,12 +122,9 @@ def check_tokens():
                 f'Отсутсвует переменная окружения: {i}.'
                 'Программа принудительно остановлена.'
             )
-        else:
-            count += 1
-    if len(variable_env) == count:
-        logger.info('Все переменные окружения доступны')
-        return True
-    return False
+            return False
+    logger.info('Все переменные окружения доступны')
+    return True
 
 
 def main():
@@ -152,8 +148,8 @@ def main():
             new_message = f'Сбой в работе программы: {error}'
             logger.error(new_message)
             if message != new_message:
-                answer = send_message(bot, new_message)
-                if answer is None:
+                answer_error = send_message(bot, new_message)
+                if answer_error is None:
                     message = new_message
         else:
             if (check_answer[0]['id'] == id_homework
