@@ -5,8 +5,8 @@ import time
 from http import HTTPStatus
 
 import requests
-import telegram
 from dotenv import load_dotenv
+import telegram
 
 import exceptions
 
@@ -25,7 +25,6 @@ PRACTICUM_TOKEN = os.getenv('PRACTICUM_TOKEN')
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
-# 10 минут
 RETRY_TIME = 600
 ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
@@ -168,6 +167,5 @@ def main():
             time.sleep(RETRY_TIME)
 
 
-# Функция main при импорт-ии homework.py в другой файл не будет исполняться
 if __name__ == '__main__':
     main()
